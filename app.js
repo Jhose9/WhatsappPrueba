@@ -36,27 +36,50 @@ app.get("/", (req, res) => {
 //   res.status(200).end();
 // });
 
-/* =========================
-   MENSAJES ENTRANTES
-========================= */
+// /* =========================
+//    MENSAJES ENTRANTES
+// ========================= */
+// app.post("/", async (req, res) => {
+//   try {
+//     const entry = req.body.entry?.[0];
+//     const change = entry?.changes?.[0];
+//     const message = change?.value?.messages?.[0];
+
+//     if (!message || message.type !== "text") {
+//       return res.sendStatus(200);
+//     }
+
+//     const from = message.from;
+//     const text = message.text.body.toLowerCase();
+
+//     console.log("📩 Mensaje recibido:", text);
+
+//     if (text === "hola") {
+//       await sendMessage(from, "mundo");
+//     }
+
+//     res.sendStatus(200);
+//   } catch (error) {
+//     console.error("❌ Error:", error);
+//     res.sendStatus(500);
+//   }
+// });
+
 app.post("/", async (req, res) => {
   try {
     const entry = req.body.entry?.[0];
     const change = entry?.changes?.[0];
     const message = change?.value?.messages?.[0];
 
-    if (!message || message.type !== "text") {
+    if (!message) {
       return res.sendStatus(200);
     }
 
     const from = message.from;
-    const text = message.text.body.toLowerCase();
+    console.log("📩 Mensaje de:", from);
 
-    console.log("📩 Mensaje recibido:", text);
-
-    if (text === "hola") {
-      await sendMessage(from, "mundo");
-    }
+    // Responder con botones
+    await sendMenu(from);
 
     res.sendStatus(200);
   } catch (error) {
@@ -64,6 +87,59 @@ app.post("/", async (req, res) => {
     res.sendStatus(500);
   }
 });
+
+/* =========================
+   FUNCIÓN MENÚ BOTONES
+========================= */
+async function sendMenu(to) {
+  const url = `https://graph.facebook.com/v23.0/${process.env.PHONE_NUMBER_ID}/messages`;
+
+  const body = {
+    messaging_product: "whatsapp",
+    to,
+    type: "interactive",
+    interactive: {
+      type: "button",
+      body: {
+        text: "Hola 👋 ¿Qué deseas hacer?",
+      },
+      action: {
+        buttons: [
+          {
+            type: "reply",
+            reply: {
+              id: "PRODUCTOS",
+              title: "📦 Ver productos",
+            },
+          },
+          {
+            type: "reply",
+            reply: {
+              id: "ASESOR",
+              title: "💬 Hablar con asesor",
+            },
+          },
+          {
+            type: "reply",
+            reply: {
+              id: "SOPORTE",
+              title: "❓ Soporte",
+            },
+          },
+        ],
+      },
+    },
+  };
+
+  await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+}
 
 async function sendMessage(to, body) {
   const url = `https://graph.facebook.com/v23.0/${process.env.PHONE_NUMBER_ID}/messages`;
