@@ -98,6 +98,10 @@ app.post("/", async (req, res) => {
       const ai = await analyzeMessage(text);
 
       console.log("🧠 IA:", ai);
+      // convertir JSON a texto legible
+      const aiText = JSON.stringify(ai, null, 2);
+
+      await sendMessage(from, `🧠 Lo que entendí de tu mensaje:\n\n${aiText}`);
 
       if (ai.intent === "saludo") {
         await sendMenu(from);
@@ -260,15 +264,26 @@ async function sendMessage(to, body) {
 
 async function analyzeMessage(message) {
   const prompt = `
-Eres un analizador de mensajes de WhatsApp.
+Eres un analizador de mensajes de WhatsApp para una tienda online.
+
+Extrae la intención del usuario y los filtros de búsqueda.
 
 Devuelve SOLO un JSON válido con esta estructura:
 {
   "intent": "productos" | "saludo" | "soporte" | "otro",
   "category": string | null,
   "discount": boolean,
+  "price_range": "bajo" | "medio" | "alto" | null,
+  "gender": "hombre" | "mujer" | "unisex" | null,
+  "color": string | null,
+  "size": string | null,
   "confidence": number
 }
+
+Ejemplos:
+- "camisas en descuento" → category: "camisas", discount: true
+- "zapatos baratos para hombre" → category: "zapatos", price_range: "bajo", gender: "hombre"
+- "pantalón negro talla m" → category: "pantalón", color: "negro", size: "M"
 
 Mensaje:
 "${message}"
