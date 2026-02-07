@@ -75,15 +75,22 @@ app.post("/", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    const from = message.from;
-    console.log("📩 Mensaje de:", from);
+    const from = message.from; // número del usuario
+    const text = message.text?.body?.toLowerCase().trim();
 
-    // Responder con botones
-    await sendMenu(from);
+    console.log("Mensaje recibido:", text);
+
+    if (text === "lista") {
+      await sendList(from);
+    } else if (text === "mapa") {
+      await sendLocation(from);
+    } else {
+      await sendMenu(from);
+    }
 
     res.sendStatus(200);
   } catch (error) {
-    console.error("❌ Error:", error);
+    console.error("Error webhook:", error);
     res.sendStatus(500);
   }
 });
@@ -125,6 +132,69 @@ async function sendMenu(to) {
               id: "SOPORTE",
               title: "❓ Soporte",
             },
+          },
+        ],
+      },
+    },
+  };
+
+  await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+async function sendLocation(to) {
+  const url = `https://graph.facebook.com/v23.0/${process.env.PHONE_NUMBER_ID}/messages`;
+
+  const body = {
+    messaging_product: "whatsapp",
+    to,
+    type: "location",
+    location: {
+      latitude: 4.711,
+      longitude: -74.0721,
+      name: "Oficina principal",
+      address: "Bogotá, Colombia",
+    },
+  };
+
+  await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+async function sendList(to) {
+  const url = `https://graph.facebook.com/v23.0/${process.env.PHONE_NUMBER_ID}/messages`;
+
+  const body = {
+    messaging_product: "whatsapp",
+    to,
+    type: "interactive",
+    interactive: {
+      type: "list",
+      body: {
+        text: "📋 Estas son nuestras opciones disponibles:",
+      },
+      action: {
+        button: "Ver opciones",
+        sections: [
+          {
+            title: "Servicios",
+            rows: [
+              { id: "VENTAS", title: "🛒 Ventas" },
+              { id: "SOPORTE", title: "🛠 Soporte técnico" },
+              { id: "ASESOR", title: "💬 Hablar con asesor" },
+            ],
           },
         ],
       },
