@@ -1,3 +1,4 @@
+require("dotenv").config();
 // Import Express.js
 const express = require("express");
 
@@ -9,7 +10,7 @@ app.use(express.json());
 
 // Set port and verify_token
 const port = process.env.PORT || 3000;
-const verifyToken = "vibecode";
+const verifyToken = process.env.VERIFY_TOKEN;
 
 // Route for GET requests
 app.get("/", (req, res) => {
