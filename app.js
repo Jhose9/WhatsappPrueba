@@ -99,9 +99,18 @@ app.post("/", async (req, res) => {
 
       console.log("🧠 IA:", ai);
       // convertir JSON a texto legible
-      const aiText = JSON.stringify(ai, null, 2);
+      const aiText = `
+📌 Intención: ${ai.intent}
+📦 Categoría: ${ai.category ?? "—"}
+🏷️ Descuento: ${ai.discount ? "Sí" : "No"}
+💰 Precio: ${ai.price_range ?? "—"}
+👤 Género: ${ai.gender ?? "—"}
+🎨 Color: ${ai.color ?? "—"}
+📏 Talla: ${ai.size ?? "—"}
+🎯 Confianza: ${ai.confidence}
+`;
 
-      await sendMessage(from, `🧠 Lo que entendí de tu mensaje:\n\n${aiText}`);
+      await sendMessage(from, aiText);
 
       if (ai.intent === "saludo") {
         await sendMenu(from);
