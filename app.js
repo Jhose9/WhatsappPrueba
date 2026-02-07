@@ -1,4 +1,12 @@
 require("dotenv").config();
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+const model = genAI.getGenerativeModel({
+  model: "gemma-3-27b-it",
+});
+
 // Import Express.js
 const express = require("express");
 
@@ -85,7 +93,26 @@ app.post("/", async (req, res) => {
     } else if (text === "mapa") {
       await sendLocation(from);
     } else {
-      await sendMenu(from);
+      //await sendMenu(from);
+      // 👉 IA entra aquí
+      const ai = await analyzeMessage(text);
+
+      console.log("🧠 IA:", ai);
+
+      if (ai.intent === "saludo") {
+        await sendMenu(from);
+      } else if (ai.intent === "productos") {
+        await sendMessage(
+          from,
+          `🔎 Buscando ${ai.category}${ai.discount ? " en descuento" : ""}...`,
+        );
+
+        // aquí luego conectas DB
+      } else if (ai.intent === "soporte") {
+        await sendMessage(from, "🛠 Un asesor te ayudará en un momento.");
+      } else {
+        await sendMenu(from);
+      }
     }
 
     res.sendStatus(200);
@@ -229,6 +256,31 @@ async function sendMessage(to, body) {
       },
     }),
   });
+}
+
+async function analyzeMessage(message) {
+  const prompt = `
+Eres un analizador de mensajes de WhatsApp.
+
+Devuelve SOLO un JSON válido con esta estructura:
+{
+  "intent": "productos" | "saludo" | "soporte" | "otro",
+  "category": string | null,
+  "discount": boolean,
+  "confidence": number
+}
+
+Mensaje:
+"${message}"
+
+No expliques nada.
+Solo JSON.
+`;
+
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
+
+  return JSON.parse(text);
 }
 
 // Start the server
