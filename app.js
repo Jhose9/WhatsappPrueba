@@ -274,11 +274,15 @@ Mensaje:
 "${message}"
 
 No expliques nada.
+No uses markdown.
 Solo JSON.
 `;
 
   const result = await model.generateContent(prompt);
-  const text = result.response.text();
+  let text = result.response.text();
+
+  // 🔥 LIMPIEZA CRÍTICA
+  text = text.replace(/```json|```/g, "").trim();
 
   return JSON.parse(text);
 }
