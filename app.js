@@ -1,6 +1,12 @@
 require("dotenv").config();
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
+const { Pinecone } = require("@pinecone-database/pinecone");
+
+const pc = new Pinecone({
+  apiKey: process.env.PINECONE_API_KEY,
+});
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const model = genAI.getGenerativeModel({
@@ -94,38 +100,19 @@ app.post("/", async (req, res) => {
       await sendLocation(from);
     } else {
       //await sendMenu(from);
-      // 👉 IA entra aquí
-      const ai = await analyzeMessage(text);
+      // 1️⃣ BUSCAR EN PINECONE
+      const products = await searchInPinecone(text);
 
-      console.log("🧠 IA:", ai);
-      // convertir JSON a texto legible
-      const aiText = `
-📌 Intención: ${ai.intent}
-📦 Categoría: ${ai.category ?? "—"}
-🏷️ Descuento: ${ai.discount ? "Sí" : "No"}
-💰 Precio: ${ai.price_range ?? "—"}
-👤 Género: ${ai.gender ?? "—"}
-🎨 Color: ${ai.color ?? "—"}
-📏 Talla: ${ai.size ?? "—"}
-🎯 Confianza: ${ai.confidence}
-`;
-
-      await sendMessage(from, aiText);
-
-      if (ai.intent === "saludo") {
-        await sendMenu(from);
-      } else if (ai.intent === "productos") {
-        await sendMessage(
-          from,
-          `🔎 Buscando ${ai.category}${ai.discount ? " en descuento" : ""}...`,
-        );
-
-        // aquí luego conectas DB
-      } else if (ai.intent === "soporte") {
-        await sendMessage(from, "🛠 Un asesor te ayudará en un momento.");
-      } else {
-        await sendMenu(from);
+      if (!products.length) {
+        await sendMessage(from, "😕 No encontré productos similares.");
+        return res.sendStatus(200);
       }
+
+      // 2️⃣ PASAR DATA A GEMINI
+      const reply = await describeProductsWithAI(products, text);
+
+      // 3️⃣ RESPONDER
+      await sendMessage(from, reply);
     }
 
     res.sendStatus(200);
@@ -134,10 +121,63 @@ app.post("/", async (req, res) => {
     res.sendStatus(500);
   }
 });
+/* =========================
+   PINECONE SEARCH
+========================= */
+
+async function searchInPinecone(text) {
+  const index = pc.index("productos-demo");
+
+  const result = await index.search({
+    query: text, // 👈 TEXTO DIRECTO
+    topK: 3,
+    includeMetadata: true,
+  });
+
+  return result.matches;
+}
 
 /* =========================
-   FUNCIÓN MENÚ BOTONES
+   IA PRESENTACIÓN
 ========================= */
+
+async function describeProductsWithAI(products, userMessage) {
+  // 🔹 Pasamos los productos tal cual vienen del vector
+  const context = products.map((p) => ({
+    similarity: p.score,
+    ...p.metadata,
+  }));
+
+  const prompt = `
+Eres un asesor de ventas por WhatsApp.
+
+El cliente escribió:
+"${userMessage}"
+
+A continuación tienes información REAL de productos obtenida desde una base de datos.
+Usa SOLO esta información. No inventes nada.
+
+Productos:
+${JSON.stringify(context, null, 2)}
+
+Tu tarea:
+- Recomienda los productos más relevantes según lo que pidió el cliente
+- Destaca solo los atributos importantes (no todos si no hace falta)
+- Usa un tono natural, cercano y comercial
+- Si hay descuento, resáltalo
+- Si hay varios productos, compáralos brevemente
+- No menciones "metadata", "vectores" ni "similitud"
+
+Responde en un solo mensaje de WhatsApp.
+`;
+
+  const result = await model.generateContent(prompt);
+  return result.response.text();
+}
+
+/* =========================
+    FUNCIÓN MENÚ BOTONES
+  ========================= */
 async function sendMenu(to) {
   const url = `https://graph.facebook.com/v23.0/${process.env.PHONE_NUMBER_ID}/messages`;
 
@@ -273,34 +313,34 @@ async function sendMessage(to, body) {
 
 async function analyzeMessage(message) {
   const prompt = `
-Eres un analizador de mensajes de WhatsApp para una tienda online.
+  Eres un analizador de mensajes de WhatsApp para una tienda online.
 
-Extrae la intención del usuario y los filtros de búsqueda.
+  Extrae la intención del usuario y los filtros de búsqueda.
 
-Devuelve SOLO un JSON válido con esta estructura:
-{
-  "intent": "productos" | "saludo" | "soporte" | "otro",
-  "category": string | null,
-  "discount": boolean,
-  "price_range": "bajo" | "medio" | "alto" | null,
-  "gender": "hombre" | "mujer" | "unisex" | null,
-  "color": string | null,
-  "size": string | null,
-  "confidence": number
-}
+  Devuelve SOLO un JSON válido con esta estructura:
+  {
+    "intent": "productos" | "saludo" | "soporte" | "otro",
+    "category": string | null,
+    "discount": boolean,
+    "price_range": "bajo" | "medio" | "alto" | null,
+    "gender": "hombre" | "mujer" | "unisex" | null,
+    "color": string | null,
+    "size": string | null,
+    "confidence": number
+  }
 
-Ejemplos:
-- "camisas en descuento" → category: "camisas", discount: true
-- "zapatos baratos para hombre" → category: "zapatos", price_range: "bajo", gender: "hombre"
-- "pantalón negro talla m" → category: "pantalón", color: "negro", size: "M"
+  Ejemplos:
+  - "camisas en descuento" → category: "camisas", discount: true
+  - "zapatos baratos para hombre" → category: "zapatos", price_range: "bajo", gender: "hombre"
+  - "pantalón negro talla m" → category: "pantalón", color: "negro", size: "M"
 
-Mensaje:
-"${message}"
+  Mensaje:
+  "${message}"
 
-No expliques nada.
-No uses markdown.
-Solo JSON.
-`;
+  No expliques nada.
+  No uses markdown.
+  Solo JSON.
+  `;
 
   const result = await model.generateContent(prompt);
   let text = result.response.text();
